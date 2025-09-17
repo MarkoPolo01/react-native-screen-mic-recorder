@@ -1,24 +1,22 @@
 package com.screenmicrecorder;
 
 import androidx.annotation.NonNull;
-import android.util.Log;
+import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
-import android.content.Context;
-import android.app.Activity;
+import android.util.Log;
 
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.bridge.Arguments;
-
 import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
-
 import com.hbisoft.hbrecorder.HBRecorder;
 import com.hbisoft.hbrecorder.HBRecorderListener;
 
@@ -28,6 +26,7 @@ import java.io.File;
 public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implements HBRecorderListener {
 
     public static final String NAME = "ScreenMicRecorder";
+
     private final ReactApplicationContext reactContext;
     private final int SCREEN_RECORD_REQUEST_CODE = 1000;
 
@@ -40,7 +39,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
         super(reactContext);
         this.reactContext = reactContext;
 
-        // Listener для результата разрешения на запись экрана
+        // Listener для получения результата запроса на запись экрана
         reactContext.addActivityEventListener(new BaseActivityEventListener() {
             @Override
             public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent intent) {
@@ -59,12 +58,6 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
                     Log.d("ScreenMicRecorder", "User accepted permission");
                     if (hbRecorder != null) {
                         hbRecorder.startScreenRecording(intent, resultCode);
-                    } else {
-                        Log.e("ScreenMicRecorder", "HBRecorder is null onActivityResult");
-                        if (startPromise != null) {
-                            startPromise.reject("NO_RECORDER", "HBRecorder instance missing");
-                            startPromise = null;
-                        }
                     }
                 }
             }
@@ -77,52 +70,51 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
         return NAME;
     }
 
-    @ReactMethod public void addListener(String ignoredEventName) {}
-    @ReactMethod public void removeListeners(Integer ignoredCount) {}
+    @ReactMethod
+    public void addListener(String ignoredEventName) {}
+
+    @ReactMethod
+    public void removeListeners(Integer ignoredCount) {}
 
     @ReactMethod
     public void startRecording(ReadableMap config, Promise promise) {
         startPromise = promise;
 
-        // Приватный каталог приложения (файл не виден в галерее и не синхронизируется)
-        File privateDir = this.reactContext.getFilesDir();
-        if (!privateDir.exists()) privateDir.mkdirs();
+        // Внутреннее приватное хранилище приложения
+        File internalDir = reactContext.getFilesDir();
+        if (!internalDir.exists()) internalDir.mkdirs();
 
-        hbRecorder = new HBRecorder(this.reactContext, this);
+        // Инициализация HBRecorder
+        hbRecorder = new HBRecorder(reactContext, this);
 
+        // Микрофон
         boolean micEnabled = config.hasKey("mic") && config.getBoolean("mic");
         hbRecorder.isAudioEnabled(micEnabled);
 
+        // Видео кодек
         hbRecorder.setVideoEncoder("DEFAULT");
 
-        // Только путь, без имени файла — HBRecorder создаст уникальное
-        hbRecorder.setOutputPath(privateDir.getAbsolutePath());
+        // Уникальное имя файла
+        String fileName = "recording_" + System.currentTimeMillis() + ".mp4";
+        hbRecorder.setOutputPath(internalDir.getAbsolutePath());
+        hbRecorder.setFileName(fileName);
 
-        boolean notificationActionEnabled =
-            config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
+        // Описание уведомления
+        boolean notificationActionEnabled = config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
         if (!notificationActionEnabled) {
             hbRecorder.setNotificationDescription("Stop recording from the application");
         }
 
         try {
-            Activity current = getCurrentActivity();
-            if (current == null) {
-                if (startPromise != null) {
-                    startPromise.reject("NO_ACTIVITY", "Current activity is null");
-                    startPromise = null;
-                }
-                return;
-            }
             MediaProjectionManager mediaProjectionManager =
-                (MediaProjectionManager) reactContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-            current.startActivityForResult(
-                mediaProjectionManager.createScreenCaptureIntent(),
-                SCREEN_RECORD_REQUEST_CODE
+                    (MediaProjectionManager) reactContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+            getCurrentActivity().startActivityForResult(
+                    mediaProjectionManager.createScreenCaptureIntent(),
+                    SCREEN_RECORD_REQUEST_CODE
             );
         } catch (Exception e) {
-            Log.e("ScreenMicRecorder", "startRecording failed", e);
             if (startPromise != null) {
-                startPromise.reject("START_FAILED", e.getMessage());
+                startPromise.reject("404", e.getMessage());
                 startPromise = null;
             }
         }
@@ -132,13 +124,12 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     public void stopRecording(Promise promise) {
         Log.d("ScreenMicRecorder", "stopRecording");
         stopPromise = promise;
-
         try {
             if (hbRecorder != null) {
                 hbRecorder.stopScreenRecording();
             } else {
                 if (stopPromise != null) {
-                    stopPromise.reject("STOP_FAILED", "HBRecorder is null");
+                    stopPromise.reject("NO_RECORDER", "Recorder not initialized");
                     stopPromise = null;
                 }
             }
@@ -158,13 +149,16 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
             promise.resolve(false);
             return;
         }
-        boolean deleted = fdelete.delete();
-        promise.resolve(deleted);
-        Log.d("ScreenMicRecorder", deleted ? "Deleted " + filename : "Unable to delete " + filename);
+        if (fdelete.delete()) {
+            Log.d("ScreenMicRecorder", "deleteRecording " + filename);
+            promise.resolve(true);
+        } else {
+            Log.d("ScreenMicRecorder", "unable to delete " + filename);
+            promise.reject("DELETE_FAILED", "Unable to delete file");
+        }
     }
 
-    // --- HBRecorder callbacks ---
-
+    // HBRecorder события
     @Override
     public void HBRecorderOnStart() {
         Log.d("ScreenMicRecorder", "HBRecorder Started");
@@ -176,7 +170,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
     @Override
     public void HBRecorderOnComplete() {
-        String uri = hbRecorder.getFilePath(); // корректный путь к созданному файлу
+        String uri = hbRecorder.getFilePath();
         Log.d("ScreenMicRecorder", "HBRecorder Completed. URI: " + uri);
 
         if (stopPromise != null) {
@@ -186,19 +180,19 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
         WritableMap params = Arguments.createMap();
         params.putString("value", uri);
-        this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("stopEvent", params);
+        reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("stopEvent", params);
     }
 
     @Override
     public void HBRecorderOnError(int errorCode, String reason) {
         Log.d("ScreenMicRecorder", "HBRecorderOnError : " + errorCode + " " + reason);
-
-        if (stopPromise != null) {
-            stopPromise.reject("STOP_ERROR", "RecorderOnError:" + errorCode + " " + reason);
-            stopPromise = null;
-        } else if (startPromise != null) {
-            startPromise.reject("START_ERROR", "RecorderOnError:" + errorCode + " " + reason);
+        if (startPromise != null) {
+            startPromise.reject("RECORDER_ERROR", "RecorderOnError:" + errorCode + " " + reason);
             startPromise = null;
+        }
+        if (stopPromise != null) {
+            stopPromise.reject("RECORDER_ERROR", "RecorderOnError:" + errorCode + " " + reason);
+            stopPromise = null;
         }
     }
 
