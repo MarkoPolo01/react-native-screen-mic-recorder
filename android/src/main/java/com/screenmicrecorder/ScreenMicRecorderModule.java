@@ -72,34 +72,35 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
   @ReactMethod
   public void startRecording(ReadableMap config, Promise promise){
-    startPromise = promise;
+      startPromise = promise;
 
-    // ❌ Было: сохраняли во внешнем файловом каталоге
-    // File outputUri = this.reactContext.getExternalFilesDir("RecordScreen");
+      // Храним в кеше, чтобы пользователь не видел и нельзя было выгрузить
+      File cacheDir = this.reactContext.getCacheDir();
+      if (!cacheDir.exists()) cacheDir.mkdirs();
 
-    // ✅ Нужно сохранять в приватный кэш приложения
-    File cacheDir = this.reactContext.getCacheDir(); // только для приложения
-    File outputUri = new File(cacheDir, "recording_" + System.currentTimeMillis() + ".mp4");
+      hbRecorder = new HBRecorder(this.reactContext, this);
 
-    Log.d("ScreenMicRecorder","startRecording path: " + outputUri.getAbsolutePath());
+      hbRecorder.isAudioEnabled(!config.hasKey("mic") || config.getBoolean("mic"));
+      hbRecorder.setVideoEncoder("DEFAULT");
 
-    hbRecorder = new HBRecorder(this.reactContext,this);
-    hbRecorder.isAudioEnabled(!config.hasKey("mic") || config.getBoolean("mic"));
-    hbRecorder.setVideoEncoder("DEFAULT");
+      // Передаём только путь к директории, без имени файла
+      hbRecorder.setOutputPath(cacheDir.getAbsolutePath());
 
-    // Указываем путь для файла
-    hbRecorder.setOutputPath(outputUri.getAbsolutePath());
+      boolean notificationActionEnabled = config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
+      if (!notificationActionEnabled) {
+          hbRecorder.setNotificationDescription("Stop recording from the application");
+      }
 
-    try {
-      MediaProjectionManager mediaProjectionManager =
-          (MediaProjectionManager) reactContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-      getCurrentActivity().startActivityForResult(
-          mediaProjectionManager.createScreenCaptureIntent(),
-          SCREEN_RECORD_REQUEST_CODE
-      );
-    } catch (Exception e) {
-      startPromise.reject("404", e.getMessage());
-    }
+      try {
+          MediaProjectionManager mediaProjectionManager =
+              (MediaProjectionManager) reactContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+          getCurrentActivity().startActivityForResult(
+              mediaProjectionManager.createScreenCaptureIntent(),
+              SCREEN_RECORD_REQUEST_CODE
+          );
+      } catch (Exception e) {
+          startPromise.reject("404", e.getMessage());
+      }
   }
 
   @ReactMethod
