@@ -1,7 +1,6 @@
 package com.screenmicrecorder;
 
 import androidx.annotation.NonNull;
-import android.os.Build;
 import android.util.Log;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
@@ -34,6 +33,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     private Promise stopPromise;
     private HBRecorder hbRecorder;
     private String fileName;
+    private String outputPath;
 
     public ScreenMicRecorderModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -92,7 +92,9 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
         // Уникальное имя файла
         fileName = "recording_" + System.currentTimeMillis() + ".mp4";
-        hbRecorder.setOutputPath(privateDir.getAbsolutePath());
+        outputPath = privateDir.getAbsolutePath();
+
+        hbRecorder.setOutputPath(outputPath);
         hbRecorder.setFileName(fileName);
 
         boolean notificationActionEnabled =
@@ -163,7 +165,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
     @Override
     public void HBRecorderOnComplete() {
-        String uri = hbRecorder.getOutputPath() + "/" + fileName;
+        String uri = outputPath + "/" + fileName;
         Log.d("ScreenMicRecorder", "HBRecorder Completed. URI: " + uri);
 
         if (stopPromise != null) {
