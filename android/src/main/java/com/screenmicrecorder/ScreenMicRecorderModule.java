@@ -73,15 +73,22 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
   public void startRecording(ReadableMap config, Promise promise){
       startPromise = promise;
 
+      // Храним в кеше, чтобы файл был скрыт
       File cacheDir = this.reactContext.getCacheDir();
       if (!cacheDir.exists()) cacheDir.mkdirs();
 
       hbRecorder = new HBRecorder(this.reactContext, this);
 
-      hbRecorder.isAudioEnabled(!config.hasKey("mic") || config.getBoolean("mic"));
+      // Микрофон по умолчанию выключен
+      boolean micEnabled = config.hasKey("mic") && config.getBoolean("mic");
+      hbRecorder.isAudioEnabled(micEnabled);
+
       hbRecorder.setVideoEncoder("DEFAULT");
 
+      // Путь + уникальное имя файла
+      String fileName = "recording_" + System.currentTimeMillis() + ".mp4";
       hbRecorder.setOutputPath(cacheDir.getAbsolutePath());
+      hbRecorder.setFileName(fileName);
 
       boolean notificationActionEnabled =
           config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
@@ -103,9 +110,18 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
   @ReactMethod
   public void stopRecording(Promise promise){
-    Log.d("ScreenMicRecorder","stopRecording");
-    stopPromise=promise;
-    hbRecorder.stopScreenRecording();
+      Log.d("ScreenMicRecorder","stopRecording");
+      stopPromise = promise;
+
+      try {
+          hbRecorder.stopScreenRecording();
+      } catch (Exception e) {
+          Log.e("ScreenMicRecorder", "Stop failed", e);
+          if (stopPromise != null) {
+              stopPromise.reject("STOP_FAILED", e.getMessage());
+              stopPromise = null;
+          }
+      }
   }
 
   @ReactMethod
