@@ -26,6 +26,7 @@ import java.io.File;
 
 @ReactModule(name = ScreenMicRecorderModule.NAME)
 public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implements HBRecorderListener {
+
     public static final String NAME = "ScreenMicRecorder";
     private final ReactApplicationContext reactContext;
     private final int SCREEN_RECORD_REQUEST_CODE = 1000;
@@ -34,14 +35,12 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     private Promise stopPromise;
 
     private HBRecorder hbRecorder;
-    private String fileName;      // имя, которое мы даём файлу
-    private String outputPath;    // путь, который мы задаём hbRecorder (private app dir)
 
     public ScreenMicRecorderModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
 
-        // Добавляем слушатель результата Activity (разрешение на запись экрана)
+        // Listener для результата разрешения на запись экрана
         reactContext.addActivityEventListener(new BaseActivityEventListener() {
             @Override
             public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent intent) {
@@ -85,7 +84,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     public void startRecording(ReadableMap config, Promise promise) {
         startPromise = promise;
 
-        // Приватный каталог приложения (не виден в галерее, не синхронизируется)
+        // Приватный каталог приложения (файл не виден в галерее и не синхронизируется)
         File privateDir = this.reactContext.getFilesDir();
         if (!privateDir.exists()) privateDir.mkdirs();
 
@@ -96,12 +95,8 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
         hbRecorder.setVideoEncoder("DEFAULT");
 
-        // задаём уникальное имя и путь
-        fileName = "recording_" + System.currentTimeMillis() + ".mp4";
-        outputPath = privateDir.getAbsolutePath();
-
-        hbRecorder.setOutputPath(outputPath);
-        hbRecorder.setFileName(fileName);
+        // Только путь, без имени файла — HBRecorder создаст уникальное
+        hbRecorder.setOutputPath(privateDir.getAbsolutePath());
 
         boolean notificationActionEnabled =
             config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
@@ -181,30 +176,11 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
     @Override
     public void HBRecorderOnComplete() {
-        // Правильный источник пути — hbRecorder.getFilePath()
-        String uri = null;
-        try {
-            uri = hbRecorder.getFilePath();
-        } catch (Exception e) {
-            Log.w("ScreenMicRecorder", "getFilePath() threw", e);
-            uri = null;
-        }
-
-        // Если по какой-то причине getFilePath() вернул null, используем fallback:
-        if (uri == null || uri.isEmpty()) {
-            // fallback — наш outputPath + filename (в редких случаях)
-            uri = outputPath != null && fileName != null ? outputPath + "/" + fileName : null;
-            Log.w("ScreenMicRecorder", "Using fallback uri: " + uri);
-        }
-
+        String uri = hbRecorder.getFilePath(); // корректный путь к созданному файлу
         Log.d("ScreenMicRecorder", "HBRecorder Completed. URI: " + uri);
 
         if (stopPromise != null) {
-            if (uri != null) {
-                stopPromise.resolve(uri);
-            } else {
-                stopPromise.reject("NO_PATH", "Recorder completed but no file path available");
-            }
+            stopPromise.resolve(uri);
             stopPromise = null;
         }
 
