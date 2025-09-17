@@ -41,7 +41,6 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     super(reactContext);
     this.reactContext = reactContext;
 
-    // Listener to handle user acceptance of screen recording permissions
     reactContext.addActivityEventListener(new BaseActivityEventListener() {
       @Override
       public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent intent) {
@@ -74,7 +73,6 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
   public void startRecording(ReadableMap config, Promise promise){
       startPromise = promise;
 
-      // Храним в кеше, чтобы пользователь не видел и нельзя было выгрузить
       File cacheDir = this.reactContext.getCacheDir();
       if (!cacheDir.exists()) cacheDir.mkdirs();
 
@@ -82,8 +80,6 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
       hbRecorder.isAudioEnabled(!config.hasKey("mic") || config.getBoolean("mic"));
       hbRecorder.setVideoEncoder("DEFAULT");
-
-      // Передаём только путь к директории, без имени файла
       hbRecorder.setOutputPath(cacheDir.getAbsolutePath());
 
       boolean notificationActionEnabled = config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
@@ -121,7 +117,6 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     }
   }
 
-  // HB Recorder Events
   @Override
   public void HBRecorderOnStart() {
     Log.d("ScreenMicRecorder","HBRecorder Started ");
@@ -134,7 +129,6 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     Log.d("ScreenMicRecorder","HBRecorder Completed. URI: " + uri);
     if (stopPromise != null)  stopPromise.resolve(uri);
 
-    // Send event to JS
     WritableMap params = Arguments.createMap();
     params.putString("value", uri);
     this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("stopEvent", params);
