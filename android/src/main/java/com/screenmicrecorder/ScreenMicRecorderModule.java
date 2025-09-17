@@ -73,16 +73,24 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
   public void startRecording(ReadableMap config, Promise promise){
       startPromise = promise;
 
+      // Храним в кеше (невидимо пользователю)
       File cacheDir = this.reactContext.getCacheDir();
       if (!cacheDir.exists()) cacheDir.mkdirs();
+
+      // Генерим имя файла сами
+      String fileName = "recording_" + System.currentTimeMillis() + ".mp4";
+      File outputFile = new File(cacheDir, fileName);
 
       hbRecorder = new HBRecorder(this.reactContext, this);
 
       hbRecorder.isAudioEnabled(!config.hasKey("mic") || config.getBoolean("mic"));
       hbRecorder.setVideoEncoder("DEFAULT");
-      hbRecorder.setOutputPath(cacheDir.getAbsolutePath());
 
-      boolean notificationActionEnabled = config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
+      // Передаём именно путь к файлу, а не директории
+      hbRecorder.setOutputPath(outputFile.getAbsolutePath());
+
+      boolean notificationActionEnabled = 
+          config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
       if (!notificationActionEnabled) {
           hbRecorder.setNotificationDescription("Stop recording from the application");
       }
