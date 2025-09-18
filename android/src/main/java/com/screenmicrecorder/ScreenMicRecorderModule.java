@@ -39,7 +39,6 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
         super(reactContext);
         this.reactContext = reactContext;
 
-        // Listener для получения результата запроса на запись экрана
         reactContext.addActivityEventListener(new BaseActivityEventListener() {
             @Override
             public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent intent) {
@@ -80,26 +79,23 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     public void startRecording(ReadableMap config, Promise promise) {
         startPromise = promise;
 
-        // Внутреннее приватное хранилище приложения
-        File internalDir = reactContext.getFilesDir();
-        if (!internalDir.exists()) internalDir.mkdirs();
-
-        // Инициализация HBRecorder
         hbRecorder = new HBRecorder(reactContext, this);
 
         // Микрофон
         boolean micEnabled = config.hasKey("mic") && config.getBoolean("mic");
         hbRecorder.isAudioEnabled(micEnabled);
 
-        // Видео кодек
-        hbRecorder.setVideoEncoder("DEFAULT");
 
         // Уникальное имя файла
+        File cacheDir = reactContext.getCacheDir();
+        if (!cacheDir.exists()) cacheDir.mkdirs();
         String fileName = "recording_" + System.currentTimeMillis() + ".mp4";
-        hbRecorder.setOutputPath(internalDir.getAbsolutePath());
+
+        // Устанавливаем путь и имя
+        hbRecorder.setOutputPath(cacheDir.getAbsolutePath());
         hbRecorder.setFileName(fileName);
 
-        // Описание уведомления
+        // Уведомление
         boolean notificationActionEnabled = config.hasKey("notificationActionEnabled") && config.getBoolean("notificationActionEnabled");
         if (!notificationActionEnabled) {
             hbRecorder.setNotificationDescription("Stop recording from the application");
@@ -114,7 +110,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
             );
         } catch (Exception e) {
             if (startPromise != null) {
-                startPromise.reject("404", e.getMessage());
+                startPromise.reject("START_FAILED", e.getMessage());
                 startPromise = null;
             }
         }
@@ -158,7 +154,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
         }
     }
 
-    // HBRecorder события
+    // События HBRecorder
     @Override
     public void HBRecorderOnStart() {
         Log.d("ScreenMicRecorder", "HBRecorder Started");
