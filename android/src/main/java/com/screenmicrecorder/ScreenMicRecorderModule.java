@@ -5,7 +5,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
-
 import android.util.Log;
 
 import com.facebook.react.bridge.Arguments;
@@ -35,6 +34,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     private Promise startPromise;
     private Promise stopPromise;
     private HBRecorder hbRecorder;
+    private boolean isCompleted = false;
 
     public ScreenMicRecorderModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -86,16 +86,18 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
     @ReactMethod
     public void startRecording(ReadableMap config, Promise promise) {
         startPromise = promise;
+        stopPromise = null;
+        isCompleted = false;
 
         File cacheDir = reactContext.getCacheDir();
         if (!cacheDir.exists()) cacheDir.mkdirs();
 
-        String fileName = "recording_" + System.currentTimeMillis() + ".mp4";
-        log("startRecording path: " + cacheDir.getAbsolutePath() + "/" + fileName);
+        String fileName = "recording_" + System.currentTimeMillis(); // без .mp4, HBRecorder добавит сам
+        log("startRecording path: " + cacheDir.getAbsolutePath() + "/" + fileName + ".mp4");
 
         hbRecorder = new HBRecorder(reactContext, this);
 
-        // Аудио (по умолчанию выключено)
+        // Аудио
         boolean micEnabled = config.hasKey("mic") && config.getBoolean("mic");
         hbRecorder.isAudioEnabled(micEnabled);
         hbRecorder.setVideoEncoder("DEFAULT");
@@ -178,6 +180,9 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
     @Override
     public void HBRecorderOnComplete() {
+        if (isCompleted) return; // защита от повторного вызова
+        isCompleted = true;
+
         String uri = hbRecorder.getFilePath();
         log("HBRecorder Completed. URI: " + uri);
 
@@ -188,7 +193,9 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
 
         WritableMap params = Arguments.createMap();
         params.putString("value", uri);
-        reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("stopEvent", params);
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+            .emit("stopEvent", params);
     }
 
     @Override
