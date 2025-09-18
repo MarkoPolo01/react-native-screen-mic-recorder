@@ -74,7 +74,7 @@ public class ScreenMicRecorderModule extends ReactContextBaseJavaModule implemen
   public void startRecording(ReadableMap config, Promise promise){
     startPromise = promise;
     File cacheDir = reactContext.getCacheDir();
-    Log.d("ScreenMicRecorder","startRecording path: " + outputUri.getAbsolutePath());
+    Log.d("ScreenMicRecorder","startRecording path: " + cacheDir.getAbsolutePath());
 
     hbRecorder= new HBRecorder(this.reactContext,this);
     hbRecorder.isAudioEnabled(!config.hasKey("mic") || (boolean) config.getBoolean("mic"));
